@@ -1,0 +1,560 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="محول التاريخ بين التقويم الهجري (أم القرى) والميلادي مع حساب المدة بالسنوات والشهور والأيام">
+  <meta name="keywords" content="محول التاريخ, تقويم أم القرى, هجري, ميلادي, حساب العمر">
+  <meta name="author" content="Your Name">
+  <title>محول التاريخ - تقويم أم القرى</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      background: #f7f9fc;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      direction: rtl;
+      padding-top: 100px;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1000px;
+      width: 100%;
+    }
+    .container.rtl {
+      flex-direction: row-reverse;
+    }
+    .container.ltr {
+      flex-direction: row;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      width: 400px;
+      text-align: center;
+      flex: 1;
+    }
+    .hijri-months, .gregorian-months {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      width: 200px;
+      text-align: right;
+    }
+    .hijri-months h2, .gregorian-months h2 {
+      font-size: 18px;
+      margin-top: 0;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    .hijri-months ol, .gregorian-months ol {
+      padding-right: 20px;
+      margin: 0;
+      color: #333;
+      font-size: 14px;
+    }
+    .hijri-months li, .gregorian-months li {
+      margin-bottom: 8px;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 20px;
+      margin-bottom: 15px;
+      color: #333;
+    }
+    select, input, button {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-size: 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    input[type="text"] {
+      font-family: monospace;
+      direction: ltr;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+      justify-content: center;
+    }
+    input {
+      width: 100px;
+      text-align: center;
+    }
+    .btn {
+      margin-top: 15px;
+      background: #0b5ed7;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #084298;
+    }
+    .reset-btn {
+      background: #6c757d;
+      margin-left: 10px;
+    }
+    .reset-btn:hover {
+      background: #5c636a;
+    }
+    .result {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f1f5ff;
+      border: 1px solid rgba(11,94,215,0.1);
+      display: none;
+      font-weight: bold;
+      color: #333;
+      text-align: right;
+    }
+    .error {
+      background: #ffe5e5;
+      border: 1px solid #ff0000;
+      color: #d32f2f;
+    }
+    .age-section {
+      margin-top: 15px;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+    }
+    .age-section h3 {
+      font-size: 16px;
+      margin: 0 0 5px;
+      color: #0b5ed7;
+    }
+    .age-calculation ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 14px;
+    }
+    .age-calculation li {
+      margin-bottom: 5px;
+    }
+    .lang-select {
+      margin-bottom: 10px;
+    }
+    .year-tooltip {
+      position: absolute;
+      background: #333;
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 10;
+      display: none;
+      max-width: 200px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    @media (max-width: 800px) {
+      .container {
+        flex-direction: column;
+        align-items: center;
+      }
+      .card, .hijri-months, .gregorian-months {
+        width: 100%;
+        max-width: 400px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container rtl">
+    <aside class="hijri-months">
+      <h2 id="hijri-months-title">الشهور الهجرية</h2>
+      <ol id="hijri-months-list"></ol>
+    </aside>
+    <div class="card">
+      <h1 id="title">محول التاريخ - تقويم أم القرى</h1>
+      <select id="language" class="lang-select">
+        <option value="ar">العربية</option>
+        <option value="en">English</option>
+      </select>
+      <label id="direction-label">تحويل من:</label><br>
+      <select id="direction">
+        <option value="h2g" data-en="Hijri to Gregorian">من هجري إلى ميلادي</option>
+        <option value="g2h" data-en="Gregorian to Hijri">من ميلادي إلى هجري</option>
+      </select>
+      <div class="row">
+        <input type="text" id="day" placeholder="اليوم" style="direction: ltr;" lang="en" inputmode="numeric">
+        <input type="text" id="month" placeholder="الشهر" style="direction: ltr;" lang="en" inputmode="numeric">
+        <input type="text" id="year" placeholder="السنة" style="direction: ltr;" lang="en" inputmode="numeric">
+      </div>
+      <div class="row">
+        <button class="btn" id="convert">تحويل</button>
+        <button class="btn reset-btn" id="reset">إعادة تعيين</button>
+      </div>
+      <div class="result" id="result"></div>
+      <div class="year-tooltip" id="year-tooltip"></div>
+    </div>
+    <aside class="gregorian-months">
+      <h2 id="gregorian-months-title">الشهور الميلادية</h2>
+      <ol id="gregorian-months-list"></ol>
+    </aside>
+  </div>
+  <script>
+    // إعداد العناصر
+    const directionEl = document.getElementById("direction");
+    const languageEl = document.getElementById("language");
+    const dayEl = document.getElementById("day");
+    const monthEl = document.getElementById("month");
+    const yearEl = document.getElementById("year");
+    const resultEl = document.getElementById("result");
+    const convertBtn = document.getElementById("convert");
+    const resetBtn = document.getElementById("reset");
+    const titleEl = document.getElementById("title");
+    const directionLabelEl = document.getElementById("direction-label");
+    const yearTooltipEl = document.getElementById("year-tooltip");
+    const hijriMonthsTitleEl = document.getElementById("hijri-months-title");
+    const hijriMonthsListEl = document.getElementById("hijri-months-list");
+    const gregorianMonthsTitleEl = document.getElementById("gregorian-months-title");
+    const gregorianMonthsListEl = document.getElementById("gregorian-months-list");
+    const containerEl = document.querySelector(".container");
+
+    // كائن الترجمات
+    const translations = {
+      ar: {
+        title: "محول التاريخ - تقويم أم القرى",
+        directionLabel: "تحويل من:",
+        dayPlaceholder: "اليوم",
+        monthPlaceholder: "الشهر",
+        yearPlaceholder: "السنة",
+        convert: "تحويل",
+        reset: "إعادة تعيين",
+        invalidInput: "الرجاء إدخال اليوم والشهر والسنة كاملة.",
+        invalidRange: "الرجاء إدخال قيم صحيحة (اليوم: 1-31، الشهر: 1-12، السنة: أكبر من 0).",
+        error: "التاريخ غير صالح أو خطأ في الاتصال بالخدمة.",
+        hijriMonthsTitle: "الشهور الهجرية",
+        gregorianMonthsTitle: "الشهور الميلادية",
+        hijriMonths: ['محرم', 'صفر', 'ربيع الأول', 'ربيع الثاني', 'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'],
+        gregorianMonths: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+        yearTooltip: "السنوات المتاحة: من 1318 هـ إلى 1638 هـ (1900 م إلى 2200 م تقريبًا). خارج 1356-1500 هـ، قد تكون التحويلات تقريبية.",
+        gregAgeTitle: "حساب المدة بالتاريخ الميلادي",
+        hijriAgeTitle: "حساب المدة بالتاريخ الهجري",
+        ageYearsMonthsDays: "السنوات: {years}، الشهور: {months}، الأيام: {days}",
+        ageMonthsDays: "الشهور: {months}، الأيام: {days}",
+        ageDays: "الأيام: {days}",
+        pastPrefix: "الماضي: ",
+        futurePrefix: "المتبقي: "
+      },
+      en: {
+        title: "Date Converter - Umm Al-Qura Calendar",
+        directionLabel: "Convert from:",
+        dayPlaceholder: "Day",
+        monthPlaceholder: "Month",
+        yearPlaceholder: "Year",
+        convert: "Convert",
+        reset: "Reset",
+        invalidInput: "Please enter day, month, and year completely.",
+        invalidRange: "Please enter valid values (Day: 1-31, Month: 1-12, Year: > 0).",
+        error: "Invalid date or connection error with the service.",
+        hijriMonthsTitle: "Hijri Months",
+        gregorianMonthsTitle: "Gregorian Months",
+        hijriMonths: ['Muharram', 'Safar', 'Rabi Al-Awwal', 'Rabi Al-Thani', 'Jumada Al-Awwal', 'Jumada Al-Akhirah', 'Rajab', 'Shaban', 'Ramadan', 'Shawwal', 'Dhu Al-Qadah', 'Dhu Al-Hijjah'],
+        gregorianMonths: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+        yearTooltip: "Available years: from 1318 AH to 1638 AH (approximately 1900 CE to 2200 CE). Outside 1356-1500 AH, conversions may be approximate.",
+        gregAgeTitle: "Duration Calculation in Gregorian Calendar",
+        hijriAgeTitle: "Duration Calculation in Hijri Calendar",
+        ageYearsMonthsDays: "Years: {years}, Months: {months}, Days: {days}",
+        ageMonthsDays: "Months: {months}, Days: {days}",
+        ageDays: "Days: {days}",
+        pastPrefix: "Past: ",
+        futurePrefix: "Remaining: "
+      }
+    };
+
+    // دالة لتحويل الأرقام العربية إلى إنجليزية
+    function toEnglishNumerals(input) {
+      const arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+      const englishNumerals = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      let result = input;
+      for (let i = 0; i < arabicNumerals.length; i++) {
+        result = result.replace(new RegExp(arabicNumerals[i], 'g'), englishNumerals[i]);
+      }
+      return result;
+    }
+
+    // دالة للتحقق من أن الإدخال يحتوي على أرقام فقط
+    function restrictToNumbers(inputEl) {
+      inputEl.addEventListener('input', () => {
+        const originalValue = inputEl.value;
+        inputEl.value = toEnglishNumerals(originalValue.replace(/[^0-9]/g, ''));
+      });
+    }
+
+    // تطبيق قيود الإدخال على الحقول
+    [dayEl, monthEl, yearEl].forEach(input => {
+      restrictToNumbers(input);
+    });
+
+    // دالة تحديث الواجهة بناءً على اللغة
+    function updateLanguage(lang) {
+      const t = translations[lang];
+      titleEl.textContent = t.title;
+      directionLabelEl.textContent = t.directionLabel;
+      dayEl.placeholder = t.dayPlaceholder;
+      monthEl.placeholder = t.monthPlaceholder;
+      yearEl.placeholder = t.yearPlaceholder;
+      convertBtn.textContent = t.convert;
+      resetBtn.textContent = t.reset;
+      directionEl.options[0].text = lang === 'ar' ? 'من هجري إلى ميلادي' : 'Hijri to Gregorian';
+      directionEl.options[1].text = lang === 'ar' ? 'من ميلادي إلى هجري' : 'Gregorian to Hijri';
+      hijriMonthsTitleEl.textContent = t.hijriMonthsTitle;
+      hijriMonthsListEl.innerHTML = t.hijriMonths.map(month => `<li>${month}</li>`).join('');
+      gregorianMonthsTitleEl.textContent = t.gregorianMonthsTitle;
+      gregorianMonthsListEl.innerHTML = t.gregorianMonths.map(month => `<li>${month}</li>`).join('');
+      document.body.style.direction = lang === 'ar' ? 'rtl' : 'ltr';
+      containerEl.className = `container ${lang === 'ar' ? 'rtl' : 'ltr'}`;
+      resultEl.style.textAlign = lang === 'ar' ? 'right' : 'left';
+      hijriMonthsListEl.style.textAlign = lang === 'ar' ? 'right' : 'left';
+      gregorianMonthsListEl.style.textAlign = lang === 'ar' ? 'right' : 'left';
+      yearTooltipEl.textContent = t.yearTooltip;
+    }
+
+    // دالة إظهار/إخفاء أيقونة السنوات المتاحة
+    let tooltipTimeout;
+    function showYearTooltip() {
+      const rect = yearEl.getBoundingClientRect();
+      yearTooltipEl.style.top = `${rect.bottom + window.scrollY + 5}px`;
+      yearTooltipEl.style.left = `${rect.left + window.scrollX}px`;
+      yearTooltipEl.style.display = 'block';
+      clearTimeout(tooltipTimeout);
+      tooltipTimeout = setTimeout(() => {
+        yearTooltipEl.style.display = 'none';
+      }, 10000);
+    }
+
+    // دالة التحقق من صحة الإدخال الأساسية
+    function validateInput(day, month, year, lang) {
+      const t = translations[lang];
+      if (!day || !month || !year) {
+        return t.invalidInput;
+      }
+      if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1) {
+        return t.invalidRange;
+      }
+      if (directionEl.value === 'h2g' && (year < 1318 || year > 1638)) {
+        return lang === 'ar' ? 'السنة يجب أن تكون بين 1318 هـ و1638 هـ' : 'Year must be between 1318 AH and 1638 AH';
+      }
+      if (directionEl.value === 'g2h' && (year < 1900 || year > 2200)) {
+        return lang === 'ar' ? 'السنة يجب أن تكون بين 1900 م و2200 م' : 'Year must be between 1900 CE and 2200 CE';
+      }
+      return null;
+    }
+
+    // دالة التحويل باستخدام API Aladhan
+    async function convertDate(d, m, y, direction, lang) {
+      const t = translations[lang];
+      let apiUrl = '';
+      let dateStr = `${d.toString().padStart(2, '0')}-${m.toString().padStart(2, '0')}-${y}`;
+      if (direction === 'h2g') {
+        apiUrl = `https://api.aladhan.com/v1/hToG?date=${dateStr}`;
+      } else {
+        apiUrl = `https://api.aladhan.com/v1/gToH?date=${dateStr}`;
+      }
+      try {
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        if (data.code === 200) {
+          const g = data.data.gregorian;
+          const h = data.data.hijri;
+          const gMonthName = t.gregorianMonths[parseInt(g.month.number) - 1];
+          const hMonthName = t.hijriMonths[parseInt(h.month.number) - 1];
+          let text = '';
+          if (direction === 'h2g') {
+            text = `${lang === 'ar' ? 'الميلادي' : 'Gregorian'}: <span style="direction: ltr; font-family: monospace">${g.day} ${gMonthName} ${g.year}</span>${lang === 'ar' ? ' م' : ''}`;
+          } else {
+            text = `${lang === 'ar' ? 'الهجري' : 'Hijri'}: <span style="direction: ltr; font-family: monospace">${h.day} ${hMonthName} ${h.year}</span>${lang === 'ar' ? ' هـ' : ' AH'}`;
+          }
+          return {
+            text,
+            gregDate: new Date(g.year, parseInt(g.month.number) - 1, g.day),
+            hijriDate: { day: parseInt(h.day), month: parseInt(h.month.number), year: parseInt(h.year) }
+          };
+        } else {
+          throw new Error(data.data || t.error);
+        }
+      } catch (e) {
+        throw new Error(t.error);
+      }
+    }
+
+    // دالة حساب المدة (تدعم الماضي والمستقبل)
+    function calculateDuration(diffDays, yearLength, monthLength, t) {
+      const isFuture = diffDays < 0;
+      const absDiffDays = Math.abs(diffDays);
+      const years = Math.floor(absDiffDays / yearLength);
+      let remaining = absDiffDays % yearLength;
+      const months = Math.floor(remaining / monthLength);
+      const days = Math.floor(remaining % monthLength);
+      const totalMonths = Math.floor(absDiffDays / monthLength);
+      const totalRemainingDays = Math.floor(absDiffDays % monthLength);
+      const totalDays = absDiffDays;
+      const prefix = isFuture ? t.futurePrefix : t.pastPrefix;
+      return `
+        <div class="age-calculation">
+          <ul>
+            <li>${prefix}${t.ageYearsMonthsDays.replace('{years}', years).replace('{months}', months).replace('{days}', days)}</li>
+            <li>${prefix}${t.ageMonthsDays.replace('{months}', totalMonths).replace('{days}', totalRemainingDays)}</li>
+            <li>${prefix}${t.ageDays.replace('{days}', totalDays)}</li>
+          </ul>
+        </div>
+      `;
+    }
+
+    // دالة التحويل التلقائي
+    async function autoConvert() {
+      const d = parseInt(dayEl.value);
+      const m = parseInt(monthEl.value);
+      const y = parseInt(yearEl.value);
+      const lang = languageEl.value;
+      const t = translations[lang];
+      const error = validateInput(d, m, y, lang);
+      if (error) {
+        resultEl.style.display = "block";
+        resultEl.classList.add("error");
+        resultEl.innerHTML = error;
+        return;
+      }
+      let out = "";
+      resultEl.classList.remove("error");
+      try {
+        const result = await convertDate(d, m, y, directionEl.value, lang);
+        out = result.text;
+        const currentDate = new Date(2025, 9, 20); // October 20, 2025
+        const inputDate = directionEl.value === 'g2h' ? new Date(y, m - 1, d) : result.gregDate;
+        const diffMs = currentDate - inputDate;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        // حساب للميلادي
+        const gregYearLength = 365.25;
+        const gregMonthLength = gregYearLength / 12;
+        const gregAge = calculateDuration(diffDays, gregYearLength, gregMonthLength, t);
+        // حساب للهجري
+        const hijriYearLength = 354.367;
+        const hijriMonthLength = hijriYearLength / 12;
+        const hijriAge = calculateDuration(diffDays, hijriYearLength, hijriMonthLength, t);
+        out += `
+          <div class="age-section">
+            <h3>${t.gregAgeTitle}</h3>
+            ${gregAge}
+          </div>
+          <div class="age-section">
+            <h3>${t.hijriAgeTitle}</h3>
+            ${hijriAge}
+          </div>
+        `;
+        resultEl.innerHTML = out;
+      } catch (e) {
+        out = e.message || t.error;
+        resultEl.classList.add("error");
+        resultEl.innerHTML = out;
+      }
+      resultEl.style.display = "block";
+    }
+
+    // دالة لتعبئة التاريخ الحالي
+    async function setCurrentDate() {
+      const now = new Date(2025, 9, 20); // October 20, 2025
+      const day = now.getDate();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      dayEl.value = day;
+      monthEl.value = month;
+      yearEl.value = year;
+      directionEl.value = "g2h";
+      await autoConvert();
+    }
+
+    // إضافة مستمعات للتحويل التلقائي عند تغيير الحقول
+    [dayEl, monthEl, yearEl, directionEl].forEach(el => {
+      el.addEventListener('input', autoConvert);
+    });
+
+    // إظهار أيقونة السنوات عند التركيز على حقل السنة
+    yearEl.addEventListener('focus', showYearTooltip);
+    yearEl.addEventListener('blur', () => {
+      clearTimeout(tooltipTimeout);
+      yearTooltipEl.style.display = 'none';
+    });
+
+    // تحديث الواجهة عند تغيير اللغة
+    languageEl.addEventListener('change', () => {
+      updateLanguage(languageEl.value);
+      if (dayEl.value && monthEl.value && yearEl.value) {
+        autoConvert();
+      }
+    });
+
+    // زر التحويل (احتياطي)
+    convertBtn.addEventListener("click", autoConvert);
+
+    // إعادة تعيين الحقول إلى التاريخ الحالي
+    resetBtn.addEventListener("click", async () => {
+      await setCurrentDate();
+      resultEl.style.display = "none";
+      resultEl.classList.remove("error");
+      yearTooltipEl.style.display = 'none';
+      clearTimeout(tooltipTimeout);
+    });
+
+    // تحديث الواجهة وتعبئة التاريخ الحالي عند التحميل
+    updateLanguage(languageEl.value);
+    setCurrentDate();
+  </script>
+</body>
+</html>
